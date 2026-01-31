@@ -1,5 +1,10 @@
 # rstmdb-py
 
+[![CI](https://github.com/rstmdb/rstmdb-py/actions/workflows/ci.yml/badge.svg)](https://github.com/rstmdb/rstmdb-py/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/pypi/pyversions/rstmdb)](https://pypi.org/project/rstmdb/)
+[![PyPI](https://img.shields.io/pypi/v/rstmdb)](https://pypi.org/project/rstmdb/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Python client library for communicating with the rstmdb server using the RCP (rstmdb Command Protocol).
 
 ## Features

@@ -106,9 +106,7 @@ class TestClientContextManager:
         mock_connection.close.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_context_manager_closes_on_error(
-        self, mock_connection: MagicMock
-    ) -> None:
+    async def test_context_manager_closes_on_error(self, mock_connection: MagicMock) -> None:
         """Context manager closes even on error."""
         client = Client()
         client._conn = mock_connection
@@ -259,9 +257,7 @@ class TestInstanceOperations:
         )
 
     @pytest.mark.asyncio
-    async def test_create_instance_with_all_params(
-        self, mock_connection: MagicMock
-    ) -> None:
+    async def test_create_instance_with_all_params(self, mock_connection: MagicMock) -> None:
         """Create instance with all optional params."""
         mock_connection.request.return_value = Response(
             id="1",

@@ -53,9 +53,7 @@ class Connection:
         # Don't reset _request_id to avoid ID collisions
         # Don't reset _events queue to preserve unprocessed events
 
-    async def connect(
-        self, client_name: str = "rstmdb-py", auth_token: str | None = None
-    ) -> None:
+    async def connect(self, client_name: str = "rstmdb-py", auth_token: str | None = None) -> None:
         """Connect to the server and perform handshake."""
         try:
             self._reader, self._writer = await asyncio.wait_for(
@@ -63,13 +61,9 @@ class Connection:
                 timeout=self.connect_timeout,
             )
         except OSError as e:
-            raise ConnectionError(
-                f"Failed to connect to {self.host}:{self.port}: {e}"
-            ) from e
+            raise ConnectionError(f"Failed to connect to {self.host}:{self.port}: {e}") from e
         except asyncio.TimeoutError as e:
-            raise ConnectionError(
-                f"Connection to {self.host}:{self.port} timed out"
-            ) from e
+            raise ConnectionError(f"Connection to {self.host}:{self.port} timed out") from e
 
         # HELLO handshake
         await self._handshake(client_name)
@@ -186,9 +180,7 @@ class Connection:
                 if not data:
                     self._connected = False
                     if not self._closed:
-                        self._fail_pending(
-                            ConnectionError("Connection closed by server")
-                        )
+                        self._fail_pending(ConnectionError("Connection closed by server"))
                     break
 
                 self._buffer += data
