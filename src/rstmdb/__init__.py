@@ -7,6 +7,8 @@ from .models import (
     ErrorCode,
     GetInstanceResult,
     GetMachineResult,
+    InstanceSummary,
+    ListInstancesResult,
     Operation,
     PutMachineResult,
     Request,
@@ -14,13 +16,15 @@ from .models import (
     ResponseError,
     StreamEvent,
     UnwatchResult,
+    WalIoStats,
+    WalStatsResult,
     WatchAllResult,
     WatchInstanceResult,
 )
 from .protocol import Frame
 from .tls import create_ssl_context
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     # Client
@@ -42,10 +46,14 @@ __all__ = [
     "GetMachineResult",
     "CreateInstanceResult",
     "GetInstanceResult",
+    "InstanceSummary",
+    "ListInstancesResult",
     "ApplyEventResult",
     "WatchInstanceResult",
     "WatchAllResult",
     "UnwatchResult",
+    "WalIoStats",
+    "WalStatsResult",
     # Protocol
     "Frame",
     # TLS

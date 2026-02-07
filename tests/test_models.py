@@ -7,6 +7,8 @@ from rstmdb.models import (
     ErrorCode,
     GetInstanceResult,
     GetMachineResult,
+    InstanceSummary,
+    ListInstancesResult,
     Operation,
     PutMachineResult,
     Request,
@@ -14,6 +16,8 @@ from rstmdb.models import (
     ResponseError,
     StreamEvent,
     UnwatchResult,
+    WalIoStats,
+    WalStatsResult,
     WatchAllResult,
     WatchInstanceResult,
 )
@@ -35,11 +39,13 @@ class TestOperation:
             "LIST_MACHINES",
             "CREATE_INSTANCE",
             "GET_INSTANCE",
+            "LIST_INSTANCES",
             "DELETE_INSTANCE",
             "APPLY_EVENT",
             "BATCH",
             "SNAPSHOT_INSTANCE",
             "WAL_READ",
+            "WAL_STATS",
             "COMPACT",
             "WATCH_INSTANCE",
             "WATCH_ALL",
@@ -73,6 +79,7 @@ class TestErrorCode:
             "INSTANCE_NOT_FOUND",
             # Already exists errors
             "MACHINE_VERSION_EXISTS",
+            "MACHINE_VERSION_LIMIT_EXCEEDED",
             "INSTANCE_EXISTS",
             # State machine errors
             "INVALID_TRANSITION",
@@ -326,6 +333,116 @@ class TestResultModels:
 
         assert result.subscription_id == "sub-1"
         assert result.removed is True
+
+    def test_instance_summary(self) -> None:
+        """Parse InstanceSummary."""
+        result = InstanceSummary(
+            id="inst-1",
+            machine="order",
+            version=1,
+            state="created",
+            created_at=1704067200,
+            updated_at=1704067300,
+            last_wal_offset=5,
+        )
+
+        assert result.id == "inst-1"
+        assert result.machine == "order"
+        assert result.version == 1
+        assert result.state == "created"
+        assert result.created_at == 1704067200
+        assert result.updated_at == 1704067300
+        assert result.last_wal_offset == 5
+
+    def test_list_instances_result(self) -> None:
+        """Parse ListInstancesResult."""
+        result = ListInstancesResult(
+            instances=[
+                InstanceSummary(
+                    id="inst-1",
+                    machine="order",
+                    version=1,
+                    state="created",
+                    created_at=1704067200,
+                    updated_at=1704067200,
+                    last_wal_offset=5,
+                ),
+                InstanceSummary(
+                    id="inst-2",
+                    machine="order",
+                    version=1,
+                    state="paid",
+                    created_at=1704067300,
+                    updated_at=1704067400,
+                    last_wal_offset=10,
+                ),
+            ],
+            total=100,
+            has_more=True,
+        )
+
+        assert len(result.instances) == 2
+        assert result.instances[0].id == "inst-1"
+        assert result.instances[1].state == "paid"
+        assert result.total == 100
+        assert result.has_more is True
+
+    def test_wal_io_stats(self) -> None:
+        """Parse WalIoStats."""
+        result = WalIoStats(
+            bytes_written=2097152,
+            bytes_read=524288,
+            writes=500,
+            reads=100,
+            fsyncs=50,
+        )
+
+        assert result.bytes_written == 2097152
+        assert result.bytes_read == 524288
+        assert result.writes == 500
+        assert result.reads == 100
+        assert result.fsyncs == 50
+
+    def test_wal_stats_result(self) -> None:
+        """Parse WalStatsResult."""
+        result = WalStatsResult(
+            entry_count=1000,
+            segment_count=5,
+            total_size_bytes=1048576,
+            latest_offset=999,
+            io_stats=WalIoStats(
+                bytes_written=2097152,
+                bytes_read=524288,
+                writes=500,
+                reads=100,
+                fsyncs=50,
+            ),
+        )
+
+        assert result.entry_count == 1000
+        assert result.segment_count == 5
+        assert result.total_size_bytes == 1048576
+        assert result.latest_offset == 999
+        assert result.io_stats.bytes_written == 2097152
+        assert result.io_stats.fsyncs == 50
+
+    def test_wal_stats_result_no_offset(self) -> None:
+        """Parse WalStatsResult without latest_offset."""
+        result = WalStatsResult(
+            entry_count=0,
+            segment_count=1,
+            total_size_bytes=0,
+            io_stats=WalIoStats(
+                bytes_written=0,
+                bytes_read=0,
+                writes=0,
+                reads=0,
+                fsyncs=0,
+            ),
+        )
+
+        assert result.entry_count == 0
+        assert result.latest_offset is None
 
 
 class TestValidation:

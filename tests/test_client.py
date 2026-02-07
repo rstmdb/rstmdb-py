@@ -330,6 +330,101 @@ class TestInstanceOperations:
 
         assert result == {"deleted": True}
 
+    @pytest.mark.asyncio
+    async def test_list_instances_no_filters(self, mock_connection: MagicMock) -> None:
+        """List instances without filters."""
+        mock_connection.request.return_value = Response(
+            id="1",
+            status="ok",
+            result={
+                "instances": [
+                    {
+                        "id": "inst-1",
+                        "machine": "order",
+                        "version": 1,
+                        "state": "created",
+                        "created_at": 1704067200,
+                        "updated_at": 1704067200,
+                        "last_wal_offset": 5,
+                    },
+                    {
+                        "id": "inst-2",
+                        "machine": "order",
+                        "version": 1,
+                        "state": "paid",
+                        "created_at": 1704067300,
+                        "updated_at": 1704067400,
+                        "last_wal_offset": 10,
+                    },
+                ],
+                "total": 2,
+                "has_more": False,
+            },
+        )
+
+        client = Client()
+        client._conn = mock_connection
+
+        result = await client.list_instances()
+
+        assert len(result.instances) == 2
+        assert result.instances[0].id == "inst-1"
+        assert result.instances[0].machine == "order"
+        assert result.instances[0].state == "created"
+        assert result.instances[1].state == "paid"
+        assert result.total == 2
+        assert result.has_more is False
+        mock_connection.request.assert_called_once_with(
+            Operation.LIST_INSTANCES,
+            {},
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_instances_with_filters(self, mock_connection: MagicMock) -> None:
+        """List instances with filtering and pagination."""
+        mock_connection.request.return_value = Response(
+            id="1",
+            status="ok",
+            result={
+                "instances": [
+                    {
+                        "id": "inst-1",
+                        "machine": "order",
+                        "version": 1,
+                        "state": "pending",
+                        "created_at": 1704067200,
+                        "updated_at": 1704067200,
+                        "last_wal_offset": 5,
+                    },
+                ],
+                "total": 50,
+                "has_more": True,
+            },
+        )
+
+        client = Client()
+        client._conn = mock_connection
+
+        result = await client.list_instances(
+            machine="order",
+            state="pending",
+            limit=10,
+            offset=20,
+        )
+
+        assert len(result.instances) == 1
+        assert result.total == 50
+        assert result.has_more is True
+        mock_connection.request.assert_called_once_with(
+            Operation.LIST_INSTANCES,
+            {
+                "machine": "order",
+                "state": "pending",
+                "limit": 10,
+                "offset": 20,
+            },
+        )
+
 
 class TestEventOperations:
     """Tests for event operations."""
@@ -561,4 +656,44 @@ class TestWalAndCompaction:
         mock_connection.request.assert_called_once_with(
             Operation.COMPACT,
             {"force_snapshot": True},
+        )
+
+    @pytest.mark.asyncio
+    async def test_wal_stats(self, mock_connection: MagicMock) -> None:
+        """WAL stats returns statistics."""
+        mock_connection.request.return_value = Response(
+            id="1",
+            status="ok",
+            result={
+                "entry_count": 1000,
+                "segment_count": 5,
+                "total_size_bytes": 1048576,
+                "latest_offset": 999,
+                "io_stats": {
+                    "bytes_written": 2097152,
+                    "bytes_read": 524288,
+                    "writes": 500,
+                    "reads": 100,
+                    "fsyncs": 50,
+                },
+            },
+        )
+
+        client = Client()
+        client._conn = mock_connection
+
+        result = await client.wal_stats()
+
+        assert result.entry_count == 1000
+        assert result.segment_count == 5
+        assert result.total_size_bytes == 1048576
+        assert result.latest_offset == 999
+        assert result.io_stats.bytes_written == 2097152
+        assert result.io_stats.bytes_read == 524288
+        assert result.io_stats.writes == 500
+        assert result.io_stats.reads == 100
+        assert result.io_stats.fsyncs == 50
+        mock_connection.request.assert_called_once_with(
+            Operation.WAL_STATS,
+            {},
         )

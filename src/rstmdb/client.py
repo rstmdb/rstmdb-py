@@ -12,10 +12,12 @@ from .models import (
     CreateInstanceResult,
     GetInstanceResult,
     GetMachineResult,
+    ListInstancesResult,
     Operation,
     PutMachineResult,
     StreamEvent,
     UnwatchResult,
+    WalStatsResult,
     WatchAllResult,
     WatchInstanceResult,
 )
@@ -335,6 +337,38 @@ class Client:
         )
         return GetInstanceResult.model_validate(result)
 
+    async def list_instances(
+        self,
+        machine: str | None = None,
+        state: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> ListInstancesResult:
+        """
+        List instances with optional filtering and pagination.
+
+        Args:
+            machine: Filter by machine name.
+            state: Filter by current state.
+            limit: Maximum number of instances to return.
+            offset: Number of instances to skip (for pagination).
+
+        Returns:
+            ListInstancesResult with instances list and pagination info.
+        """
+        params: dict[str, Any] = {}
+        if machine:
+            params["machine"] = machine
+        if state:
+            params["state"] = state
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
+
+        result = await self._request(Operation.LIST_INSTANCES, params)
+        return ListInstancesResult.model_validate(result)
+
     async def delete_instance(
         self,
         instance_id: str,
@@ -534,6 +568,17 @@ class Client:
         if limit:
             params["limit"] = limit
         return await self._request(Operation.WAL_READ, params)
+
+    async def wal_stats(self) -> WalStatsResult:
+        """
+        Get WAL statistics.
+
+        Returns:
+            WalStatsResult with WAL statistics including entry count,
+            segment count, total size, and I/O stats.
+        """
+        result = await self._request(Operation.WAL_STATS, {})
+        return WalStatsResult.model_validate(result)
 
     # Compaction
 

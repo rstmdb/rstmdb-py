@@ -19,11 +19,13 @@ class Operation(str, Enum):
     LIST_MACHINES = "LIST_MACHINES"
     CREATE_INSTANCE = "CREATE_INSTANCE"
     GET_INSTANCE = "GET_INSTANCE"
+    LIST_INSTANCES = "LIST_INSTANCES"
     DELETE_INSTANCE = "DELETE_INSTANCE"
     APPLY_EVENT = "APPLY_EVENT"
     BATCH = "BATCH"
     SNAPSHOT_INSTANCE = "SNAPSHOT_INSTANCE"
     WAL_READ = "WAL_READ"
+    WAL_STATS = "WAL_STATS"
     COMPACT = "COMPACT"
     WATCH_INSTANCE = "WATCH_INSTANCE"
     WATCH_ALL = "WATCH_ALL"
@@ -48,6 +50,7 @@ class ErrorCode(str, Enum):
 
     # Already exists errors
     MACHINE_VERSION_EXISTS = "MACHINE_VERSION_EXISTS"
+    MACHINE_VERSION_LIMIT_EXCEEDED = "MACHINE_VERSION_LIMIT_EXCEEDED"
     INSTANCE_EXISTS = "INSTANCE_EXISTS"
 
     # State machine errors
@@ -175,3 +178,43 @@ class UnwatchResult(BaseModel):
 
     subscription_id: str
     removed: bool
+
+
+class InstanceSummary(BaseModel):
+    """Instance summary for list responses (excludes ctx for efficiency)."""
+
+    id: str
+    machine: str
+    version: int
+    state: str
+    created_at: int
+    updated_at: int
+    last_wal_offset: int
+
+
+class ListInstancesResult(BaseModel):
+    """Result of LIST_INSTANCES operation."""
+
+    instances: list[InstanceSummary]
+    total: int
+    has_more: bool
+
+
+class WalIoStats(BaseModel):
+    """WAL I/O statistics."""
+
+    bytes_written: int
+    bytes_read: int
+    writes: int
+    reads: int
+    fsyncs: int
+
+
+class WalStatsResult(BaseModel):
+    """Result of WAL_STATS operation."""
+
+    entry_count: int
+    segment_count: int
+    total_size_bytes: int
+    latest_offset: int | None = None
+    io_stats: WalIoStats
