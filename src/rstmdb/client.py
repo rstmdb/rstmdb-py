@@ -10,6 +10,7 @@ from .errors import ConnectionError, ServerError
 from .models import (
     ApplyEventResult,
     CreateInstanceResult,
+    FlushAllResult,
     GetInstanceResult,
     GetMachineResult,
     ListInstancesResult,
@@ -596,3 +597,18 @@ class Client:
             Operation.COMPACT,
             {"force_snapshot": force_snapshot},
         )
+
+    async def flush_all(self) -> FlushAllResult:
+        """
+        Clear all instances and machine definitions from the database.
+
+        Requires ``storage.allow_flush_all: true`` in server configuration.
+
+        Returns:
+            FlushAllResult with counts of removed instances and machines.
+
+        Raises:
+            ServerError: If FLUSH_ALL is disabled on the server.
+        """
+        result = await self._request(Operation.FLUSH_ALL, {})
+        return FlushAllResult.model_validate(result)

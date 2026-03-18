@@ -5,6 +5,7 @@ from rstmdb.models import (
     ApplyEventResult,
     CreateInstanceResult,
     ErrorCode,
+    FlushAllResult,
     GetInstanceResult,
     GetMachineResult,
     InstanceSummary,
@@ -462,6 +463,32 @@ class TestValidation:
         """Invalid operation value raises error."""
         with pytest.raises(ValidationError):
             Request(id="1", op="INVALID_OP")  # type: ignore[arg-type]
+
+    def test_flush_all_result(self) -> None:
+        """FlushAllResult validates correctly."""
+        result = FlushAllResult(
+            flushed=True,
+            instances_removed=42,
+            machines_removed=5,
+        )
+        assert result.flushed is True
+        assert result.instances_removed == 42
+        assert result.machines_removed == 5
+
+    def test_flush_all_result_from_dict(self) -> None:
+        """FlushAllResult can be created from server response dict."""
+        data = {
+            "flushed": True,
+            "instances_removed": 0,
+            "machines_removed": 0,
+        }
+        result = FlushAllResult.model_validate(data)
+        assert result.flushed is True
+        assert result.instances_removed == 0
+
+    def test_flush_all_operation_exists(self) -> None:
+        """FLUSH_ALL operation is defined."""
+        assert Operation.FLUSH_ALL == "FLUSH_ALL"
 
     def test_response_error_missing_code(self) -> None:
         """ResponseError requires code."""

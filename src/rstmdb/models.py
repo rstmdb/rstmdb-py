@@ -27,6 +27,7 @@ class Operation(str, Enum):
     WAL_READ = "WAL_READ"
     WAL_STATS = "WAL_STATS"
     COMPACT = "COMPACT"
+    FLUSH_ALL = "FLUSH_ALL"
     WATCH_INSTANCE = "WATCH_INSTANCE"
     WATCH_ALL = "WATCH_ALL"
     UNWATCH = "UNWATCH"
@@ -218,3 +219,11 @@ class WalStatsResult(BaseModel):
     total_size_bytes: int
     latest_offset: int | None = None
     io_stats: WalIoStats
+
+
+class FlushAllResult(BaseModel):
+    """Result of FLUSH_ALL operation."""
+
+    flushed: bool
+    instances_removed: int
+    machines_removed: int

@@ -5,6 +5,7 @@ from .models import (
     ApplyEventResult,
     CreateInstanceResult,
     ErrorCode,
+    FlushAllResult,
     GetInstanceResult,
     GetMachineResult,
     InstanceSummary,
@@ -24,7 +25,7 @@ from .models import (
 from .protocol import Frame
 from .tls import create_ssl_context
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 __all__ = [
     # Client
@@ -49,6 +50,7 @@ __all__ = [
     "InstanceSummary",
     "ListInstancesResult",
     "ApplyEventResult",
+    "FlushAllResult",
     "WatchInstanceResult",
     "WatchAllResult",
     "UnwatchResult",

@@ -697,3 +697,29 @@ class TestWalAndCompaction:
             Operation.WAL_STATS,
             {},
         )
+
+    @pytest.mark.asyncio
+    async def test_flush_all(self, mock_connection: MagicMock) -> None:
+        """Flush all clears instances and machines."""
+        mock_connection.request.return_value = Response(
+            id="1",
+            status="ok",
+            result={
+                "flushed": True,
+                "instances_removed": 42,
+                "machines_removed": 5,
+            },
+        )
+
+        client = Client()
+        client._conn = mock_connection
+
+        result = await client.flush_all()
+
+        assert result.flushed is True
+        assert result.instances_removed == 42
+        assert result.machines_removed == 5
+        mock_connection.request.assert_called_once_with(
+            Operation.FLUSH_ALL,
+            {},
+        )
