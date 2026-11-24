@@ -9,6 +9,9 @@ from .connection import Connection
 from .errors import ConnectionError, ServerError
 from .models import (
     ApplyEventResult,
+    BackupBeginResult,
+    BackupChunkResult,
+    BackupEndResult,
     CreateInstanceResult,
     FlushAllResult,
     GetInstanceResult,
@@ -213,9 +216,19 @@ class Client:
 
         if response.status != "ok":
             if response.error:
-                raise ServerError(response.error.code, response.error.message)
+                raise ServerError(
+                    response.error.code,
+                    response.error.message,
+                    retryable=response.error.retryable,
+                    details=response.error.details,
+                )
             raise ServerError("INTERNAL", "Unknown error")
         return response.result or {}
+
+    @property
+    def negotiated_features(self) -> list[str]:
+        """Features negotiated during the HELLO handshake."""
+        return self._conn.negotiated_features
 
     # System operations
 
@@ -227,6 +240,10 @@ class Client:
     async def info(self) -> dict[str, Any]:
         """Get server information."""
         return await self._request(Operation.INFO, {})
+
+    async def replication_status(self) -> dict[str, Any]:
+        """Get replication role and status."""
+        return await self._request(Operation.REPLICATION_STATUS, {})
 
     # Machine operations
 
@@ -314,7 +331,7 @@ class Client:
         params: dict[str, Any] = {"machine": machine, "version": version}
         if instance_id:
             params["instance_id"] = instance_id
-        if initial_ctx:
+        if initial_ctx is not None:
             params["initial_ctx"] = initial_ctx
         if idempotency_key:
             params["idempotency_key"] = idempotency_key
@@ -399,6 +416,8 @@ class Client:
         payload: dict[str, Any] | None = None,
         expected_state: str | None = None,
         idempotency_key: str | None = None,
+        expected_wal_offset: int | None = None,
+        event_id: str | None = None,
     ) -> ApplyEventResult:
         """
         Apply an event to an instance.
@@ -409,20 +428,37 @@ class Client:
             payload: Optional event payload.
             expected_state: Optional expected current state.
             idempotency_key: Optional idempotency key.
+            expected_wal_offset: Optional expected WAL offset.
+            event_id: Optional caller event identifier.
 
         Returns:
             ApplyEventResult with transition details.
         """
         params: dict[str, Any] = {"instance_id": instance_id, "event": event}
-        if payload:
+        if payload is not None:
             params["payload"] = payload
         if expected_state:
             params["expected_state"] = expected_state
+        if expected_wal_offset is not None:
+            params["expected_wal_offset"] = expected_wal_offset
+        if event_id is not None:
+            params["event_id"] = event_id
         if idempotency_key:
             params["idempotency_key"] = idempotency_key
 
         result = await self._request(Operation.APPLY_EVENT, params)
         return ApplyEventResult.model_validate(result)
+
+    async def batch(
+        self,
+        operations: list[dict[str, Any]],
+        mode: str = "best_effort",
+    ) -> dict[str, Any]:
+        """Execute multiple operations in a batch."""
+        return await self._request(
+            Operation.BATCH,
+            {"ops": operations, "mode": mode},
+        )
 
     # Watch operations
 
@@ -430,6 +466,7 @@ class Client:
         self,
         instance_id: str,
         include_ctx: bool = True,
+        from_offset: int | None = None,
     ) -> WatchInstanceResult:
         """
         Watch a specific instance for state changes.
@@ -437,17 +474,18 @@ class Client:
         Args:
             instance_id: Instance ID to watch.
             include_ctx: Include context in events.
+            from_offset: Optional WAL offset to start replaying from.
 
         Returns:
             WatchInstanceResult with subscription details.
         """
-        result = await self._request(
-            Operation.WATCH_INSTANCE,
-            {
-                "instance_id": instance_id,
-                "include_ctx": include_ctx,
-            },
-        )
+        params: dict[str, Any] = {
+            "instance_id": instance_id,
+            "include_ctx": include_ctx,
+        }
+        if from_offset is not None:
+            params["from_offset"] = from_offset
+        result = await self._request(Operation.WATCH_INSTANCE, params)
         return WatchInstanceResult.model_validate(result)
 
     async def watch_all(
@@ -457,6 +495,7 @@ class Client:
         to_states: list[str] | None = None,
         events: list[str] | None = None,
         include_ctx: bool = True,
+        from_offset: int | None = None,
     ) -> WatchAllResult:
         """
         Watch all instances matching the filter criteria.
@@ -467,11 +506,14 @@ class Client:
             to_states: Filter by target states.
             events: Filter by event names.
             include_ctx: Include context in events.
+            from_offset: Optional WAL offset to start replaying from.
 
         Returns:
             WatchAllResult with subscription details.
         """
         params: dict[str, Any] = {"include_ctx": include_ctx}
+        if from_offset is not None:
+            params["from_offset"] = from_offset
         if machines:
             params["machines"] = machines
         if from_states:
@@ -612,3 +654,34 @@ class Client:
         """
         result = await self._request(Operation.FLUSH_ALL, {})
         return FlushAllResult.model_validate(result)
+
+    # Hot backup operations
+
+    async def backup_begin(self, compression: str = "gzip") -> BackupBeginResult:
+        """Stage a hot backup archive on the server."""
+        result = await self._request(
+            Operation.BACKUP_BEGIN,
+            {"compression": compression},
+        )
+        return BackupBeginResult.model_validate(result)
+
+    async def backup_chunk(
+        self,
+        backup_id: str,
+        offset: int = 0,
+        length: int | None = None,
+    ) -> BackupChunkResult:
+        """Read a chunk from an active staged backup."""
+        params: dict[str, Any] = {"backup_id": backup_id, "offset": offset}
+        if length is not None:
+            params["len"] = length
+        result = await self._request(Operation.BACKUP_CHUNK, params)
+        return BackupChunkResult.model_validate(result)
+
+    async def backup_end(self, backup_id: str) -> BackupEndResult:
+        """Close and release a staged backup session."""
+        result = await self._request(
+            Operation.BACKUP_END,
+            {"backup_id": backup_id},
+        )
+        return BackupEndResult.model_validate(result)

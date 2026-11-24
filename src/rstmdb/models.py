@@ -31,6 +31,10 @@ class Operation(str, Enum):
     WATCH_INSTANCE = "WATCH_INSTANCE"
     WATCH_ALL = "WATCH_ALL"
     UNWATCH = "UNWATCH"
+    REPLICATION_STATUS = "REPLICATION_STATUS"
+    BACKUP_BEGIN = "BACKUP_BEGIN"
+    BACKUP_CHUNK = "BACKUP_CHUNK"
+    BACKUP_END = "BACKUP_END"
 
 
 class ErrorCode(str, Enum):
@@ -63,6 +67,13 @@ class ErrorCode(str, Enum):
     WAL_IO_ERROR = "WAL_IO_ERROR"
     INTERNAL_ERROR = "INTERNAL_ERROR"
     RATE_LIMITED = "RATE_LIMITED"
+
+    # Idempotency, guard, and replication errors
+    IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT"
+    GUARD_UNKNOWN = "GUARD_UNKNOWN"
+    READ_ONLY_MODE = "READ_ONLY_MODE"
+    REPLICATION_TIMEOUT = "REPLICATION_TIMEOUT"
+    REPLICATION_ERROR = "REPLICATION_ERROR"
 
 
 class Request(BaseModel):
@@ -239,3 +250,25 @@ class FlushAllResult(BaseModel):
     flushed: bool
     instances_removed: int
     machines_removed: int
+
+
+class BackupBeginResult(BaseModel):
+    """Result of BACKUP_BEGIN operation."""
+
+    backup_id: str
+    manifest: dict[str, Any]
+    total_bytes: int
+    chunk_size: int
+
+
+class BackupChunkResult(BaseModel):
+    """Result of BACKUP_CHUNK operation."""
+
+    bytes: str
+    eof: bool
+
+
+class BackupEndResult(BaseModel):
+    """Result of BACKUP_END operation."""
+
+    ok: bool

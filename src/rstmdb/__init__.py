@@ -3,6 +3,9 @@ from .connection import Connection
 from .errors import ConnectionError, ProtocolError, RstmdbError, ServerError
 from .models import (
     ApplyEventResult,
+    BackupBeginResult,
+    BackupChunkResult,
+    BackupEndResult,
     CreateInstanceResult,
     ErrorCode,
     FlushAllResult,
@@ -50,6 +53,9 @@ __all__ = [
     "InstanceSummary",
     "ListInstancesResult",
     "ApplyEventResult",
+    "BackupBeginResult",
+    "BackupChunkResult",
+    "BackupEndResult",
     "FlushAllResult",
     "WatchInstanceResult",
     "WatchAllResult",

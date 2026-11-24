@@ -3,6 +3,9 @@ from pydantic import ValidationError
 
 from rstmdb.models import (
     ApplyEventResult,
+    BackupBeginResult,
+    BackupChunkResult,
+    BackupEndResult,
     CreateInstanceResult,
     ErrorCode,
     FlushAllResult,
@@ -51,6 +54,10 @@ class TestOperation:
             "WATCH_INSTANCE",
             "WATCH_ALL",
             "UNWATCH",
+            "REPLICATION_STATUS",
+            "BACKUP_BEGIN",
+            "BACKUP_CHUNK",
+            "BACKUP_END",
         ]
         for op in expected:
             assert hasattr(Operation, op)
@@ -90,6 +97,12 @@ class TestErrorCode:
             "WAL_IO_ERROR",
             "INTERNAL_ERROR",
             "RATE_LIMITED",
+            # Idempotency, guard, and replication errors
+            "IDEMPOTENCY_CONFLICT",
+            "GUARD_UNKNOWN",
+            "READ_ONLY_MODE",
+            "REPLICATION_TIMEOUT",
+            "REPLICATION_ERROR",
         ]
         for code in expected:
             assert hasattr(ErrorCode, code)
@@ -445,6 +458,20 @@ class TestResultModels:
         assert result.entry_count == 0
         assert result.latest_offset is None
 
+    def test_backup_result_models(self) -> None:
+        """Parse hot backup result models."""
+        beg = BackupBeginResult(
+            backup_id="bak-1",
+            manifest={"version": 1},
+            total_bytes=128,
+            chunk_size=64,
+        )
+        chk = BackupChunkResult(bytes="YWJj", eof=True)
+        end = BackupEndResult(ok=True)
+        assert beg.backup_id == "bak-1"
+        assert chk.eof is True
+        assert end.ok is True
+
 
 class TestValidation:
     """Tests for model validation."""
@@ -509,7 +536,7 @@ class TestValidation:
 
     def test_response_error_unknown_code_preserves_string(self) -> None:
         """Unknown wire error codes deserialize as str without ValidationError."""
-        for wire_code in ("IDEMPOTENCY_CONFLICT", "FUTURE_ERROR_CODE"):
+        for wire_code in ("FUTURE_ERROR_CODE", "ANOTHER_UNRECOGNIZED_CODE"):
             resp = Response.model_validate(
                 {
                     "type": "response",

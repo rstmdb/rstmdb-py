@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .models import ErrorCode
@@ -27,7 +27,16 @@ class ProtocolError(RstmdbError):
 class ServerError(RstmdbError):
     """Server returned an error response."""
 
-    def __init__(self, code: ErrorCode | str, message: str) -> None:
+    def __init__(
+        self,
+        code: ErrorCode | str,
+        message: str,
+        *,
+        retryable: bool = False,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         self.code = code
         self.message = message
+        self.retryable = retryable
+        self.details = details or {}
         super().__init__(f"{code}: {message}")
