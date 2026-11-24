@@ -27,7 +27,7 @@ class ProtocolError(RstmdbError):
 class ServerError(RstmdbError):
     """Server returned an error response."""
 
-    def __init__(self, code: ErrorCode, message: str) -> None:
+    def __init__(self, code: ErrorCode | str, message: str) -> None:
         self.code = code
         self.message = message
         super().__init__(f"{code}: {message}")
