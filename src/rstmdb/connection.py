@@ -38,11 +38,17 @@ class Connection:
         self._buffer = b""
         self._closed = False
         self._connected = False
+        self._negotiated_features: list[str] = []
 
     @property
     def is_connected(self) -> bool:
         """Check if currently connected."""
         return self._connected and not self._closed and self._writer is not None
+
+    @property
+    def negotiated_features(self) -> list[str]:
+        """Features negotiated during the HELLO handshake."""
+        return list(self._negotiated_features)
 
     def _reset(self) -> None:
         """Reset connection state for reconnection."""
@@ -50,6 +56,7 @@ class Connection:
         self._writer = None
         self._buffer = b""
         self._connected = False
+        self._negotiated_features = []
         # Don't reset _request_id to avoid ID collisions
         # Don't reset _events queue to preserve unprocessed events
 
@@ -84,12 +91,16 @@ class Connection:
                 "protocol_version": 1,
                 "client_name": client_name,
                 "wire_modes": ["binary_json"],
-                "features": ["idempotency", "batch"],
+                "features": ["idempotency", "durable_idempotency", "batch"],
             },
         )
         if response.status != "ok":
             error_msg = response.error.message if response.error else "Unknown error"
             raise ConnectionError(f"Handshake failed: {error_msg}")
+        if isinstance(response.result, dict):
+            features = response.result.get("features")
+            if isinstance(features, list):
+                self._negotiated_features = [str(f) for f in features]
 
     async def _authenticate(self, token: str) -> None:
         """Perform AUTH with bearer token."""
@@ -104,7 +115,12 @@ class Connection:
         )
         if response.status != "ok":
             if response.error:
-                raise ServerError(response.error.code, response.error.message)
+                raise ServerError(
+                    response.error.code,
+                    response.error.message,
+                    retryable=response.error.retryable,
+                    details=response.error.details,
+                )
             raise ConnectionError("Authentication failed")
 
     async def _request_raw(self, op: Operation, params: dict[str, Any]) -> Response:

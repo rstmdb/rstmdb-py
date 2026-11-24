@@ -723,3 +723,188 @@ class TestWalAndCompaction:
             Operation.FLUSH_ALL,
             {},
         )
+
+
+class TestWaveAProtocolParity:
+    """Tests for v0.3.0 and v1.0 protocol additions."""
+
+    @pytest.mark.asyncio
+    async def test_handshake_negotiates_durable_idempotency(self) -> None:
+        """HELLO requests durable_idempotency and stores server-negotiated features."""
+        conn = Connection("127.0.0.1", 7401)
+        conn._request_raw = AsyncMock(  # type: ignore[method-assign]
+            return_value=Response(
+                id="1",
+                status="ok",
+                result={
+                    "protocol_version": 1,
+                    "wire_mode": "binary_json",
+                    "server_name": "rstmdb",
+                    "server_version": "0.3.0",
+                    "features": ["idempotency", "durable_idempotency", "batch"],
+                },
+            )
+        )
+
+        await conn._handshake("test-client")
+
+        conn._request_raw.assert_called_once_with(
+            Operation.HELLO,
+            {
+                "protocol_version": 1,
+                "client_name": "test-client",
+                "wire_modes": ["binary_json"],
+                "features": ["idempotency", "durable_idempotency", "batch"],
+            },
+        )
+        assert "durable_idempotency" in conn.negotiated_features
+
+    @pytest.mark.asyncio
+    async def test_apply_event_with_event_id_offset_and_replay(
+        self, mock_connection: MagicMock
+    ) -> None:
+        """APPLY_EVENT sends expected_wal_offset and event_id and exposes applied=False."""
+        mock_connection.request.return_value = Response(
+            id="1",
+            status="ok",
+            result={
+                "from_state": "created",
+                "to_state": "paid",
+                "wal_offset": 11,
+                "applied": False,
+                "event_id": "evt-1",
+            },
+        )
+
+        client = Client()
+        client._conn = mock_connection
+
+        result = await client.apply_event(
+            "inst-1",
+            "PAY",
+            payload={"amount": 10},
+            expected_wal_offset=10,
+            event_id="evt-1",
+            idempotency_key="key-1",
+        )
+
+        assert result.applied is False
+        assert result.event_id == "evt-1"
+        mock_connection.request.assert_called_once_with(
+            Operation.APPLY_EVENT,
+            {
+                "instance_id": "inst-1",
+                "event": "PAY",
+                "payload": {"amount": 10},
+                "expected_wal_offset": 10,
+                "event_id": "evt-1",
+                "idempotency_key": "key-1",
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_batch_atomic(self, mock_connection: MagicMock) -> None:
+        """BATCH forwards operations and mode."""
+        mock_connection.request.return_value = Response(
+            id="1",
+            status="ok",
+            result={"results": [{"status": "ok", "result": {}}], "wal_offset": 20},
+        )
+
+        client = Client()
+        client._conn = mock_connection
+        ops = [{"op": "APPLY_EVENT", "params": {"instance_id": "i-1", "event": "GO"}}]
+
+        res = await client.batch(ops, mode="atomic")
+
+        assert res["wal_offset"] == 20
+        mock_connection.request.assert_called_once_with(
+            Operation.BATCH,
+            {"ops": ops, "mode": "atomic"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_watch_with_from_offset(self, mock_connection: MagicMock) -> None:
+        """WATCH_INSTANCE and WATCH_ALL forward from_offset when supplied."""
+        mock_connection.request.return_value = Response(
+            id="1",
+            status="ok",
+            result={
+                "subscription_id": "sub-1",
+                "instance_id": "i-1",
+                "current_state": "a",
+                "current_wal_offset": 5,
+            },
+        )
+        client = Client()
+        client._conn = mock_connection
+        await client.watch_instance("i-1", from_offset=3)
+        mock_connection.request.assert_called_once_with(
+            Operation.WATCH_INSTANCE,
+            {"instance_id": "i-1", "include_ctx": True, "from_offset": 3},
+        )
+
+    @pytest.mark.asyncio
+    async def test_replication_status_and_backup_ops(self, mock_connection: MagicMock) -> None:
+        """replication_status and backup_begin/chunk/end issue expected RPC calls."""
+        client = Client()
+        client._conn = mock_connection
+
+        mock_connection.request.return_value = Response(
+            id="1", status="ok", result={"role": "standalone"}
+        )
+        status = await client.replication_status()
+        assert status["role"] == "standalone"
+
+        mock_connection.request.return_value = Response(
+            id="2",
+            status="ok",
+            result={
+                "backup_id": "bak-1",
+                "manifest": {"version": 1},
+                "total_bytes": 128,
+                "chunk_size": 64,
+            },
+        )
+        beg = await client.backup_begin(compression="gzip")
+        assert beg.backup_id == "bak-1"
+        assert beg.total_bytes == 128
+
+        mock_connection.request.return_value = Response(
+            id="3", status="ok", result={"bytes": "YWJj", "eof": True}
+        )
+        chk = await client.backup_chunk("bak-1", offset=0, length=64)
+        assert chk.bytes == "YWJj"
+        assert chk.eof is True
+        mock_connection.request.assert_called_with(
+            Operation.BACKUP_CHUNK, {"backup_id": "bak-1", "offset": 0, "len": 64}
+        )
+
+        mock_connection.request.return_value = Response(id="4", status="ok", result={"ok": True})
+        end = await client.backup_end("bak-1")
+        assert end.ok is True
+
+    @pytest.mark.asyncio
+    async def test_server_error_preserves_retryable_and_details(
+        self, mock_connection: MagicMock
+    ) -> None:
+        """_request propagates retryable flag and details onto ServerError."""
+        mock_connection.request.return_value = Response(
+            id="1",
+            status="error",
+            error=ResponseError(
+                code=ErrorCode.IDEMPOTENCY_CONFLICT,
+                message="idempotency conflict",
+                retryable=False,
+                details={"key": "k-1"},
+            ),
+        )
+        client = Client()
+        client._conn = mock_connection
+
+        with pytest.raises(ServerError) as exc_info:
+            await client.apply_event("i-1", "PAY", idempotency_key="k-1")
+
+        assert exc_info.value.code == ErrorCode.IDEMPOTENCY_CONFLICT
+        assert exc_info.value.retryable is False
+        assert exc_info.value.details == {"key": "k-1"}
