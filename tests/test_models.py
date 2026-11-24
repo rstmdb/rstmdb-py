@@ -494,3 +494,42 @@ class TestValidation:
         """ResponseError requires code."""
         with pytest.raises(ValidationError):
             ResponseError(message="error", retryable=False)  # type: ignore[call-arg]
+
+    def test_response_error_known_code_is_enum(self) -> None:
+        """Known wire error codes still deserialize as ErrorCode."""
+        err = ResponseError.model_validate(
+            {
+                "code": "NOT_FOUND",
+                "message": "Instance not found",
+                "retryable": False,
+            }
+        )
+        assert err.code == ErrorCode.NOT_FOUND
+        assert isinstance(err.code, ErrorCode)
+
+    def test_response_error_unknown_code_preserves_string(self) -> None:
+        """Unknown wire error codes deserialize as str without ValidationError."""
+        for wire_code in ("IDEMPOTENCY_CONFLICT", "FUTURE_ERROR_CODE"):
+            resp = Response.model_validate(
+                {
+                    "type": "response",
+                    "id": "req-1",
+                    "status": "error",
+                    "error": {
+                        "code": wire_code,
+                        "message": "new server error",
+                        "retryable": False,
+                    },
+                }
+            )
+            assert resp.error is not None
+            assert resp.error.code == wire_code
+            assert type(resp.error.code) is str
+
+    def test_server_error_accepts_unknown_code(self) -> None:
+        """ServerError accepts unknown string codes alongside ErrorCode."""
+        from rstmdb.errors import ServerError
+
+        err = ServerError("FUTURE_ERROR_CODE", "unrecognized")
+        assert err.code == "FUTURE_ERROR_CODE"
+        assert str(err) == "FUTURE_ERROR_CODE: unrecognized"

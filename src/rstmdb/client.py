@@ -214,7 +214,7 @@ class Client:
         if response.status != "ok":
             if response.error:
                 raise ServerError(response.error.code, response.error.message)
-            raise ServerError("INTERNAL", "Unknown error")  # type: ignore[arg-type]
+            raise ServerError("INTERNAL", "Unknown error")
         return response.result or {}
 
     # System operations

@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class Operation(str, Enum):
@@ -77,10 +77,22 @@ class Request(BaseModel):
 class ResponseError(BaseModel):
     """Error details in a response."""
 
-    code: ErrorCode
+    code: ErrorCode | str
     message: str
     retryable: bool
     details: dict[str, Any] = {}
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def _coerce_error_code(cls, value: Any) -> Any:
+        if isinstance(value, ErrorCode):
+            return value
+        if isinstance(value, str):
+            try:
+                return ErrorCode(value)
+            except ValueError:
+                return value
+        return value
 
 
 class Response(BaseModel):
